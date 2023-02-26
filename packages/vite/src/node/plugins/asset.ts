@@ -6,13 +6,13 @@ import * as mrmime from 'mrmime'
 import type {
   NormalizedOutputOptions,
   PluginContext,
-  RenderedChunk
+  RenderedChunk,
 } from 'rollup'
 import MagicString from 'magic-string'
 import colors from 'picocolors'
 import {
   createToImportMetaURLBasedRelativeRuntime,
-  toOutputFilePathInJS
+  toOutputFilePathInJS,
 } from '../build'
 import type { Plugin } from '../plugin'
 import type { ResolvedConfig } from '../config'
@@ -24,6 +24,7 @@ export const assetUrlRE = /__VITE_ASSET__([a-z\d]+)__(?:\$_(.*?)__)?/g
 
 const rawRE = /(?:\?|&)raw(?:&|$)/
 const urlRE = /(\?|&)url(?:&|$)/
+const jsSourceMapRE = /\.[cm]?js\.map$/
 
 const assetCache = new WeakMap<ResolvedConfig, Map<string, string>>()
 
@@ -56,10 +57,10 @@ export function renderAssetUrlInJS(
   config: ResolvedConfig,
   chunk: RenderedChunk,
   opts: NormalizedOutputOptions,
-  code: string
+  code: string,
 ): MagicString | undefined {
   const toRelativeRuntime = createToImportMetaURLBasedRelativeRuntime(
-    opts.format
+    opts.format,
   )
 
   let match: RegExpExecArray | null
@@ -73,11 +74,12 @@ export function renderAssetUrlInJS(
 
   // In both cases, the wrapping should already be fine
 
+  assetUrlRE.lastIndex = 0
   while ((match = assetUrlRE.exec(code))) {
     s ||= new MagicString(code)
     const [full, referenceId, postfix = ''] = match
     const file = ctx.getFileName(referenceId)
-    chunk.viteMetadata.importedAssets.add(cleanUrl(file))
+    chunk.viteMetadata!.importedAssets.add(cleanUrl(file))
     const filename = file + postfix
     const replacement = toOutputFilePathInJS(
       filename,
@@ -85,7 +87,7 @@ export function renderAssetUrlInJS(
       chunk.fileName,
       'js',
       config,
-      toRelativeRuntime
+      toRelativeRuntime,
     )
     const replacementString =
       typeof replacement === 'string'
@@ -97,6 +99,7 @@ export function renderAssetUrlInJS(
   // Replace __VITE_PUBLIC_ASSET__5aa0ddc0__ with absolute paths
 
   const publicAssetUrlMap = publicAssetUrlCache.get(config)!
+  publicAssetUrlRE.lastIndex = 0
   while ((match = publicAssetUrlRE.exec(code))) {
     s ||= new MagicString(code)
     const [full, hash] = match
@@ -107,7 +110,7 @@ export function renderAssetUrlInJS(
       chunk.fileName,
       'js',
       config,
-      toRelativeRuntime
+      toRelativeRuntime,
     )
     const replacementString =
       typeof replacement === 'string'
@@ -162,7 +165,7 @@ export function assetPlugin(config: ResolvedConfig): Plugin {
         const file = checkPublicFile(id, config) || cleanUrl(id)
         // raw query, read file and return as string
         return `export default ${JSON.stringify(
-          await fsp.readFile(file, 'utf-8')
+          await fsp.readFile(file, 'utf-8'),
         )}`
       }
 
@@ -181,7 +184,7 @@ export function assetPlugin(config: ResolvedConfig): Plugin {
       if (s) {
         return {
           code: s.toString(),
-          map: config.build.sourcemap ? s.generateMap({ hires: true }) : null
+          map: config.build.sourcemap ? s.generateMap({ hires: true }) : null,
         }
       } else {
         return null
@@ -190,23 +193,28 @@ export function assetPlugin(config: ResolvedConfig): Plugin {
 
     generateBundle(_, bundle) {
       // do not emit assets for SSR build
-      if (config.command === 'build' && config.build.ssr) {
+      if (
+        config.command === 'build' &&
+        config.build.ssr &&
+        !config.build.ssrEmitAssets
+      ) {
         for (const file in bundle) {
           if (
             bundle[file].type === 'asset' &&
-            !file.includes('ssr-manifest.json')
+            !file.endsWith('ssr-manifest.json') &&
+            !jsSourceMapRE.test(file)
           ) {
             delete bundle[file]
           }
         }
       }
-    }
+    },
   }
 }
 
 export function checkPublicFile(
   url: string,
-  { publicDir }: ResolvedConfig
+  { publicDir }: ResolvedConfig,
 ): string | undefined {
   // note if the file is in /public, the resolver would have returned it
   // as-is so it's not going to be a fully resolved path.
@@ -214,6 +222,10 @@ export function checkPublicFile(
     return
   }
   const publicFile = path.join(publicDir, cleanUrl(url))
+  if (!publicFile.startsWith(publicDir)) {
+    // can happen if URL starts with '../'
+    return
+  }
   if (fs.existsSync(publicFile)) {
     return publicFile
   } else {
@@ -224,7 +236,7 @@ export function checkPublicFile(
 export async function fileToUrl(
   id: string,
   config: ResolvedConfig,
-  ctx: PluginContext
+  ctx: PluginContext,
 ): Promise<string> {
   if (config.command === 'serve') {
     return fileToDevUrl(id, config)
@@ -252,7 +264,7 @@ function fileToDevUrl(id: string, config: ResolvedConfig) {
 
 export function getPublicAssetFilename(
   hash: string,
-  config: ResolvedConfig
+  config: ResolvedConfig,
 ): string | undefined {
   return publicAssetUrlCache.get(config)?.get(hash)
 }
@@ -267,7 +279,7 @@ export const publicAssetUrlRE = /__VITE_PUBLIC_ASSET__([a-z\d]{8})__/g
 
 export function publicFileToBuiltUrl(
   url: string,
-  config: ResolvedConfig
+  config: ResolvedConfig,
 ): string {
   if (config.command !== 'build') {
     // We don't need relative base or renderBuiltUrl support during dev
@@ -300,7 +312,7 @@ async function fileToBuiltUrl(
   id: string,
   config: ResolvedConfig,
   pluginContext: PluginContext,
-  skipPublicCheck = false
+  skipPublicCheck = false,
 ): Promise<string> {
   if (!skipPublicCheck && checkPublicFile(id, config)) {
     return publicFileToBuiltUrl(id, config)
@@ -325,7 +337,7 @@ async function fileToBuiltUrl(
   ) {
     if (config.build.lib && isGitLfsPlaceholder(content)) {
       config.logger.warn(
-        colors.yellow(`Inlined file ${id} was not downloaded via Git LFS`)
+        colors.yellow(`Inlined file ${id} was not downloaded via Git LFS`),
       )
     }
 
@@ -341,7 +353,7 @@ async function fileToBuiltUrl(
       // Ignore directory structure for asset file names
       name: path.basename(file),
       type: 'asset',
-      source: content
+      source: content,
     })
 
     const originalName = normalizePath(path.relative(config.root, file))
@@ -358,7 +370,7 @@ export async function urlToBuiltUrl(
   url: string,
   importer: string,
   config: ResolvedConfig,
-  pluginContext: PluginContext
+  pluginContext: PluginContext,
 ): Promise<string> {
   if (checkPublicFile(url, config)) {
     return publicFileToBuiltUrl(url, config)
@@ -371,6 +383,6 @@ export async function urlToBuiltUrl(
     config,
     pluginContext,
     // skip public check since we just did it above
-    true
+    true,
   )
 }

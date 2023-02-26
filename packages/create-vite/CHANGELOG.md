@@ -1,3 +1,52 @@
+## 4.1.0 (2023-02-02)
+
+* chore(create-vite): update plugin-react to 3.1.0 ([8895629](https://github.com/vitejs/vite/commit/8895629))
+* fix: two folders are created when the project name contains spaces (#11630) ([758fc6c](https://github.com/vitejs/vite/commit/758fc6c)), closes [#11630](https://github.com/vitejs/vite/issues/11630)
+* fix(deps): update all non-major dependencies (#11846) ([5d55083](https://github.com/vitejs/vite/commit/5d55083)), closes [#11846](https://github.com/vitejs/vite/issues/11846)
+
+
+
+## 4.1.0-beta.0 (2023-01-26)
+
+* chore: typecheck create-vite (#11295) ([af86e5b](https://github.com/vitejs/vite/commit/af86e5b)), closes [#11295](https://github.com/vitejs/vite/issues/11295)
+* chore: update create-vite templates for beta testing ([7dbb24f](https://github.com/vitejs/vite/commit/7dbb24f))
+* chore: update plugin-react to 3.1.0-beta.0 (#11820) ([f0480a5](https://github.com/vitejs/vite/commit/f0480a5)), closes [#11820](https://github.com/vitejs/vite/issues/11820)
+* chore(create-vite): added transition to grow back drop in (#11392) ([d0757e2](https://github.com/vitejs/vite/commit/d0757e2)), closes [#11392](https://github.com/vitejs/vite/issues/11392)
+* chore(deps): update all non-major dependencies (#11321) ([dcc0004](https://github.com/vitejs/vite/commit/dcc0004)), closes [#11321](https://github.com/vitejs/vite/issues/11321)
+* chore(deps): update all non-major dependencies (#11419) ([896475d](https://github.com/vitejs/vite/commit/896475d)), closes [#11419](https://github.com/vitejs/vite/issues/11419)
+* chore(deps): update all non-major dependencies (#11701) ([1d2ee63](https://github.com/vitejs/vite/commit/1d2ee63)), closes [#11701](https://github.com/vitejs/vite/issues/11701)
+* chore(deps): update all non-major dependencies (#11787) ([271394f](https://github.com/vitejs/vite/commit/271394f)), closes [#11787](https://github.com/vitejs/vite/issues/11787)
+* fix(create-vite): update templates to use better font (#11665) ([a65d31b](https://github.com/vitejs/vite/commit/a65d31b)), closes [#11665](https://github.com/vitejs/vite/issues/11665)
+* feat(create-vite): add preprocess to sveltejs template (#11600) ([529b0a6](https://github.com/vitejs/vite/commit/529b0a6)), closes [#11600](https://github.com/vitejs/vite/issues/11600)
+* test: use default import for fs-extra (#11543) ([d3bed53](https://github.com/vitejs/vite/commit/d3bed53)), closes [#11543](https://github.com/vitejs/vite/issues/11543)
+
+
+
+## 4.0.0 (2022-12-09)
+
+* fix(create-vite): update react-swc template name (#11281) ([b3b9ac5](https://github.com/vitejs/vite/commit/b3b9ac5)), closes [#11281](https://github.com/vitejs/vite/issues/11281)
+* feat(create-vite): add react-swc templates (#11280) ([348146f](https://github.com/vitejs/vite/commit/348146f)), closes [#11280](https://github.com/vitejs/vite/issues/11280)
+* feat(svelte)!: update svelte templates to vite-plugin-svelte 2.0.0 (#11279) ([2a558ef](https://github.com/vitejs/vite/commit/2a558ef)), closes [#11279](https://github.com/vitejs/vite/issues/11279)
+* chore: udpate vite and plugins to stable (#11278) ([026f41e](https://github.com/vitejs/vite/commit/026f41e)), closes [#11278](https://github.com/vitejs/vite/issues/11278)
+
+
+
+## 4.0.0-beta.0 (2022-12-07)
+
+* chore: enable prettier trailing commas (#11167) ([134ce68](https://github.com/vitejs/vite/commit/134ce68)), closes [#11167](https://github.com/vitejs/vite/issues/11167)
+* chore: update create-vite to use beta versions (#11244) ([f7cfab9](https://github.com/vitejs/vite/commit/f7cfab9)), closes [#11244](https://github.com/vitejs/vite/issues/11244)
+* chore(create-vite): align vue template with create-vue (#11128) ([1a54e58](https://github.com/vitejs/vite/commit/1a54e58)), closes [#11128](https://github.com/vitejs/vite/issues/11128)
+* chore(deps): typescript 4.9 (#11229) ([6b4c4e2](https://github.com/vitejs/vite/commit/6b4c4e2)), closes [#11229](https://github.com/vitejs/vite/issues/11229)
+* chore(deps): update all non-major dependencies (#10910) ([f6ad607](https://github.com/vitejs/vite/commit/f6ad607)), closes [#10910](https://github.com/vitejs/vite/issues/10910)
+* chore(deps): update all non-major dependencies (#11006) ([96f2e98](https://github.com/vitejs/vite/commit/96f2e98)), closes [#11006](https://github.com/vitejs/vite/issues/11006)
+* chore(deps): update all non-major dependencies (#11182) ([8b83089](https://github.com/vitejs/vite/commit/8b83089)), closes [#11182](https://github.com/vitejs/vite/issues/11182)
+* refactor: move framework plugins out of core (#11158) ([5935619](https://github.com/vitejs/vite/commit/5935619)), closes [#11158](https://github.com/vitejs/vite/issues/11158)
+* fix(deps): update all non-major dependencies (#10804) ([f686afa](https://github.com/vitejs/vite/commit/f686afa)), closes [#10804](https://github.com/vitejs/vite/issues/10804)
+* fix(deps): update all non-major dependencies (#11091) ([073a4bf](https://github.com/vitejs/vite/commit/073a4bf)), closes [#11091](https://github.com/vitejs/vite/issues/11091)
+* perf: regexp perf issues, refactor regexp stylistic issues (#10905) ([fc007df](https://github.com/vitejs/vite/commit/fc007df)), closes [#10905](https://github.com/vitejs/vite/issues/10905)
+
+
+
 ## <small>3.2.1 (2022-11-07)</small>
 
 * chore(deps): update all non-major dependencies (#10725) ([22cfad8](https://github.com/vitejs/vite/commit/22cfad8)), closes [#10725](https://github.com/vitejs/vite/issues/10725)

@@ -42,16 +42,18 @@ import type {
   LoadResult,
   MinimalPluginContext,
   ModuleInfo,
+  ModuleOptions,
   NormalizedInputOptions,
   OutputOptions,
   ParallelPluginHooks,
+  PartialNull,
   PartialResolvedId,
   ResolvedId,
   RollupError,
   PluginContext as RollupPluginContext,
   SourceDescription,
   SourceMap,
-  TransformResult
+  TransformResult,
 } from 'rollup'
 import * as acorn from 'acorn'
 import type { RawSourceMap } from '@ampproject/remapping'
@@ -73,7 +75,7 @@ import {
   normalizePath,
   numberToPos,
   prettifyUrl,
-  timeFrom
+  timeFrom,
 } from '../utils'
 import { FS_PREFIX } from '../constants'
 import type { ResolvedConfig } from '../config'
@@ -105,7 +107,7 @@ export interface PluginContainer {
        */
       scan?: boolean
       isEntry?: boolean
-    }
+    },
   ): Promise<PartialResolvedId | null>
   transform(
     code: string,
@@ -113,21 +115,19 @@ export interface PluginContainer {
     options?: {
       inMap?: SourceDescription['map']
       ssr?: boolean
-    }
+    },
   ): Promise<SourceDescription | null>
   load(
     id: string,
     options?: {
       ssr?: boolean
-    }
+    },
   ): Promise<LoadResult | null>
   close(): Promise<void>
 }
 
 type PluginContext = Omit<
   RollupPluginContext,
-  // not supported
-  | 'load'
   // not documented
   | 'cache'
   // deprecated
@@ -139,14 +139,14 @@ export let parser = acorn.Parser
 export async function createPluginContainer(
   config: ResolvedConfig,
   moduleGraph?: ModuleGraph,
-  watcher?: FSWatcher
+  watcher?: FSWatcher,
 ): Promise<PluginContainer> {
   const isDebug = process.env.DEBUG
   const {
     plugins,
     logger,
     root,
-    build: { rollupOptions }
+    build: { rollupOptions },
   } = config
   const { getSortedPluginHooks, getSortedPlugins } =
     createPluginHookUtils(plugins)
@@ -154,19 +154,19 @@ export async function createPluginContainer(
   const seenResolves: Record<string, true | undefined> = {}
   const debugResolve = createDebugger('vite:resolve')
   const debugPluginResolve = createDebugger('vite:plugin-resolve', {
-    onlyWhenFocused: 'vite:plugin'
+    onlyWhenFocused: 'vite:plugin',
   })
   const debugPluginTransform = createDebugger('vite:plugin-transform', {
-    onlyWhenFocused: 'vite:plugin'
+    onlyWhenFocused: 'vite:plugin',
   })
   const debugSourcemapCombineFlag = 'vite:sourcemap-combine'
   const isDebugSourcemapCombineFocused = process.env.DEBUG?.includes(
-    debugSourcemapCombineFlag
+    debugSourcemapCombineFlag,
   )
   const debugSourcemapCombineFilter =
     process.env.DEBUG_VITE_SOURCEMAP_COMBINE_FILTER
   const debugSourcemapCombine = createDebugger('vite:sourcemap-combine', {
-    onlyWhenFocused: true
+    onlyWhenFocused: true,
   })
 
   // ---------------------------------------------------------------------------
@@ -176,8 +176,8 @@ export async function createPluginContainer(
   const minimalContext: MinimalPluginContext = {
     meta: {
       rollupVersion,
-      watchMode: true
-    }
+      watchMode: true,
+    },
   }
 
   function warnIncompatibleMethod(method: string, plugin: string) {
@@ -185,9 +185,9 @@ export async function createPluginContainer(
       colors.cyan(`[plugin:${plugin}] `) +
         colors.yellow(
           `context method ${colors.bold(
-            `${method}()`
-          )} is not supported in serve mode. This plugin is likely not vite-compatible.`
-        )
+            `${method}()`,
+          )} is not supported in serve mode. This plugin is likely not vite-compatible.`,
+        ),
     )
   }
 
@@ -195,12 +195,13 @@ export async function createPluginContainer(
   async function hookParallel<H extends AsyncPluginHooks & ParallelPluginHooks>(
     hookName: H,
     context: (plugin: Plugin) => ThisType<FunctionPluginHooks[H]>,
-    args: (plugin: Plugin) => Parameters<FunctionPluginHooks[H]>
+    args: (plugin: Plugin) => Parameters<FunctionPluginHooks[H]>,
   ): Promise<void> {
     const parallelPromises: Promise<unknown>[] = []
     for (const plugin of getSortedPlugins(hookName)) {
       const hook = plugin[hookName]
       if (!hook) continue
+      // @ts-expect-error hook is not a primitive
       const handler: Function = 'handler' in hook ? hook.handler : hook
       if ((hook as { sequential?: boolean }).sequential) {
         await Promise.all(parallelPromises)
@@ -220,10 +221,14 @@ export async function createPluginContainer(
       if (key in info) {
         return info[key]
       }
+      // Don't throw an error when returning from an async function
+      if (key === 'then') {
+        return undefined
+      }
       throw Error(
-        `[vite] The "${key}" property of ModuleInfo is not supported.`
+        `[vite] The "${key}" property of ModuleInfo is not supported.`,
       )
-    }
+    },
   }
 
   // same default value of "moduleInfo.meta" as in Rollup
@@ -237,7 +242,7 @@ export async function createPluginContainer(
     if (!module.info) {
       module.info = new Proxy(
         { id, meta: module.meta || EMPTY_OBJECT } as ModuleInfo,
-        ModuleInfoProxy
+        ModuleInfoProxy,
       )
     }
     return module.info
@@ -274,7 +279,7 @@ export async function createPluginContainer(
         sourceType: 'module',
         ecmaVersion: 'latest',
         locations: true,
-        ...opts
+        ...opts,
       })
     }
 
@@ -286,7 +291,7 @@ export async function createPluginContainer(
         custom?: CustomPluginOptions
         isEntry?: boolean
         skipSelf?: boolean
-      }
+      },
     ) {
       let skip: Set<Plugin> | undefined
       if (options?.skipSelf && this._activePlugin) {
@@ -299,10 +304,32 @@ export async function createPluginContainer(
         isEntry: !!options?.isEntry,
         skip,
         ssr: this.ssr,
-        scan: this._scan
+        scan: this._scan,
       })
       if (typeof out === 'string') out = { id: out }
       return out as ResolvedId | null
+    }
+
+    async load(
+      options: {
+        id: string
+        resolveDependencies?: boolean
+      } & Partial<PartialNull<ModuleOptions>>,
+    ): Promise<ModuleInfo> {
+      // We may not have added this to our module graph yet, so ensure it exists
+      await moduleGraph?.ensureEntryFromUrl(options.id)
+      // Not all options passed to this function make sense in the context of loading individual files,
+      // but we can at least update the module info properties we support
+      updateModuleInfo(options.id, options)
+
+      await container.load(options.id, { ssr: this.ssr })
+      const moduleInfo = this.getModuleInfo(options.id)
+      // This shouldn't happen due to calling ensureEntryFromUrl, but 1) our types can't ensure that
+      // and 2) moduleGraph may not have been provided (though in the situations where that happens,
+      // we should never have plugins calling this.load)
+      if (!moduleInfo)
+        throw Error(`Failed to load module with id ${options.id}`)
+      return moduleInfo
     }
 
     getModuleInfo(id: string) {
@@ -341,23 +368,23 @@ export async function createPluginContainer(
 
     warn(
       e: string | RollupError,
-      position?: number | { column: number; line: number }
+      position?: number | { column: number; line: number },
     ) {
       const err = formatError(e, position, this)
       const msg = buildErrorMessage(
         err,
         [colors.yellow(`warning: ${err.message}`)],
-        false
+        false,
       )
       logger.warn(msg, {
         clear: true,
-        timestamp: true
+        timestamp: true,
       })
     }
 
     error(
       e: string | RollupError,
-      position?: number | { column: number; line: number }
+      position?: number | { column: number; line: number },
     ): never {
       // error thrown here is caught by the transform middleware and passed on
       // the the error middleware.
@@ -368,7 +395,7 @@ export async function createPluginContainer(
   function formatError(
     e: string | RollupError,
     position: number | { column: number; line: number } | undefined,
-    ctx: Context
+    ctx: Context,
   ) {
     const err = (
       typeof e === 'string' ? new Error(e) : e
@@ -384,13 +411,8 @@ export async function createPluginContainer(
     if (ctx._activeCode) {
       err.pluginCode = ctx._activeCode
 
-      const pos =
-        position != null
-          ? position
-          : err.pos != null
-          ? err.pos
-          : // some rollup plugins, e.g. json, sets position instead of pos
-            (err as any).position
+      // some rollup plugins, e.g. json, sets err.position instead of err.pos
+      const pos = position ?? err.pos ?? (err as any).position
 
       if (pos != null) {
         let errLocation
@@ -399,16 +421,16 @@ export async function createPluginContainer(
         } catch (err2) {
           logger.error(
             colors.red(
-              `Error in error handler:\n${err2.stack || err2.message}\n`
+              `Error in error handler:\n${err2.stack || err2.message}\n`,
             ),
             // print extra newline to separate the two errors
-            { error: err2 }
+            { error: err2 },
           )
           throw err
         }
         err.loc = err.loc || {
           file: err.id,
-          ...errLocation
+          ...errLocation,
         }
         err.frame = err.frame || generateCodeFrame(ctx._activeCode, pos)
       } else if (err.loc) {
@@ -427,7 +449,7 @@ export async function createPluginContainer(
         err.loc = {
           file: err.id,
           line: (err as any).line,
-          column: (err as any).column
+          column: (err as any).column,
         }
         err.frame = err.frame || generateCodeFrame(err.id!, err.loc)
       }
@@ -438,11 +460,26 @@ export async function createPluginContainer(
           const traced = new TraceMap(rawSourceMap as any)
           const { source, line, column } = originalPositionFor(traced, {
             line: Number(err.loc.line),
-            column: Number(err.loc.column)
+            column: Number(err.loc.column),
           })
           if (source && line != null && column != null) {
             err.loc = { file: source, line, column }
           }
+        }
+      }
+    } else if (err.loc) {
+      if (!err.frame) {
+        let code = err.pluginCode
+        if (err.loc.file) {
+          err.id = normalizePath(err.loc.file)
+          if (!code) {
+            try {
+              code = fs.readFileSync(err.loc.file, 'utf-8')
+            } catch {}
+          }
+        }
+        if (code) {
+          err.frame = generateCodeFrame(code, err.loc)
         }
       }
     }
@@ -495,9 +532,9 @@ export async function createPluginContainer(
           combinedMap = combineSourcemaps(cleanUrl(this.filename), [
             {
               ...(m as RawSourceMap),
-              sourcesContent: combinedMap.sourcesContent
+              sourcesContent: combinedMap.sourcesContent,
             },
-            combinedMap as RawSourceMap
+            combinedMap as RawSourceMap,
           ]) as SourceMap
         }
       }
@@ -506,7 +543,7 @@ export async function createPluginContainer(
           ? new MagicString(this.originalCode).generateMap({
               includeContent: true,
               hires: true,
-              source: cleanUrl(this.filename)
+              source: cleanUrl(this.filename),
             })
           : null
       }
@@ -532,13 +569,13 @@ export async function createPluginContainer(
       }
       if (options.acornInjectPlugins) {
         parser = acorn.Parser.extend(
-          ...(arraify(options.acornInjectPlugins) as any)
+          ...(arraify(options.acornInjectPlugins) as any),
         )
       }
       return {
         acorn,
         acornInjectPlugins: [],
-        ...options
+        ...options,
       }
     })(),
 
@@ -548,7 +585,7 @@ export async function createPluginContainer(
       await hookParallel(
         'buildStart',
         (plugin) => new Context(plugin),
-        () => [container.options as NormalizedInputOptions]
+        () => [container.options as NormalizedInputOptions],
       )
     },
 
@@ -580,7 +617,7 @@ export async function createPluginContainer(
           custom: options?.custom,
           isEntry: !!options?.isEntry,
           ssr,
-          scan
+          scan,
         })
         if (!result) continue
 
@@ -595,7 +632,7 @@ export async function createPluginContainer(
           debugPluginResolve(
             timeFrom(pluginResolveStart),
             plugin.name,
-            prettifyUrl(id, root)
+            prettifyUrl(id, root),
           )
 
         // resolveId() is hookFirst - first non-null result is returned.
@@ -609,8 +646,8 @@ export async function createPluginContainer(
           seenResolves[key] = true
           debugResolve(
             `${timeFrom(resolveStart)} ${colors.cyan(rawId)} -> ${colors.dim(
-              id
-            )}`
+              id,
+            )}`,
           )
         }
       }
@@ -669,7 +706,7 @@ export async function createPluginContainer(
           debugPluginTransform(
             timeFrom(start),
             plugin.name,
-            prettifyUrl(id, root)
+            prettifyUrl(id, root),
           )
         if (isObject(result)) {
           if (result.code !== undefined) {
@@ -689,7 +726,7 @@ export async function createPluginContainer(
       }
       return {
         code,
-        map: ctx._getCombinedSourcemap()
+        map: ctx._getCombinedSourcemap(),
       }
     },
 
@@ -699,15 +736,15 @@ export async function createPluginContainer(
       await hookParallel(
         'buildEnd',
         () => ctx,
-        () => []
+        () => [],
       )
       await hookParallel(
         'closeBundle',
         () => ctx,
-        () => []
+        () => [],
       )
       closed = true
-    }
+    },
   }
 
   return container
