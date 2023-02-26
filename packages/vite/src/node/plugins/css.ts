@@ -30,6 +30,7 @@ import {
   CLIENT_PUBLIC_PATH,
   CSS_LANGS_RE,
   SPECIAL_QUERY_RE,
+  URL_RE
 } from '../constants'
 import type { ResolvedConfig } from '../config'
 import type { Plugin } from '../plugin'
@@ -124,6 +125,9 @@ const inlineCSSRE = /(?:\?|&)inline-css\b/
 const usedRE = /(?:\?|&)used\b/
 const varRE = /^var\(/i
 
+const viteCSSURLMarker = '__VITE_CSS_URL_'
+const viteCSSURLMarkerRE = /__VITE_CSS_URL_([^"]+)/
+
 const cssBundleName = 'style.css'
 
 const enum PreprocessLang {
@@ -166,6 +170,21 @@ export const removedPureCssFilesCache = new WeakMap<
   Map<string, RenderedChunk>
 >()
 
+export const pureCssIdMapAssetUrl = new Map<string, string>()
+export const removedDynamicCssUrlsCache = new Map<string, string>()
+
+export function getDynamicCssAssetUrl(importUrl: string): string | undefined {
+  const pureCssId = removedDynamicCssUrlsCache.get(importUrl)
+  return pureCssId ? pureCssIdMapAssetUrl.get(pureCssId) : undefined
+}
+
+/**
+ * remove ?url from module id
+ */
+export function getPureCssId(id: string, root: string): string {
+  return path.relative(root, id.replace(/\?.+$/, ''))
+}
+
 const postcssConfigCache: Record<
   string,
   WeakMap<ResolvedConfig, PostCSSConfigResult | null>
@@ -193,6 +212,23 @@ export function cssPlugin(config: ResolvedConfig): Plugin {
 
     configureServer(_server) {
       server = _server
+    },
+
+    load(id) {
+      if (isCSSRequest(id) && URL_RE.test(id)) {
+        const pureCssId = getPureCssId(id, config.root)
+
+        if (config.command === 'serve') {
+          return `export default "${config.base}${pureCssId}"`
+        }
+
+        this.emitFile({
+          type: 'chunk',
+          id: pureCssId
+        })
+
+        return `export default "${viteCSSURLMarker}${pureCssId}"`
+      }
     },
 
     buildStart() {
@@ -460,6 +496,16 @@ export function cssPostPlugin(config: ResolvedConfig): Plugin {
     },
 
     async renderChunk(code, chunk, opts) {
+      if (
+        chunk.facadeModuleId &&
+        isCSSRequest(chunk.facadeModuleId) &&
+        URL_RE.test(chunk.facadeModuleId)
+      ) {
+        // mark css url file
+        // connect fileName with pureCssId
+        const pureCssId = getPureCssId(chunk.facadeModuleId, config.root)
+        removedDynamicCssUrlsCache.set(chunk.fileName, pureCssId)
+      }
       let chunkCSS = ''
       let isPureCssChunk = true
       const ids = Object.keys(chunk.modules)
@@ -572,7 +618,15 @@ export function cssPostPlugin(config: ResolvedConfig): Plugin {
           generatedAssets
             .get(config)!
             .set(referenceId, { originalName, isEntry })
-          chunk.viteMetadata!.importedCss.add(this.getFileName(referenceId))
+          const fileName = this.getFileName(referenceId)
+          if (chunk.facadeModuleId) {
+            // connect css id with css file name
+            pureCssIdMapAssetUrl.set(
+              getPureCssId(chunk.facadeModuleId, config.root),
+              config.base + fileName
+            )
+          }
+          chunk.viteMetadata!.importedCss.add(fileName)
         } else if (!config.build.ssr) {
           // legacy build and inline css
 
@@ -690,6 +744,11 @@ export function cssPostPlugin(config: ResolvedConfig): Plugin {
               emptyChunkRE,
               // remove css import while preserving source map location
               (m) => `/* empty css ${''.padEnd(m.length - 15)}*/`,
+            )
+            chunk.code = chunk.code.replace(
+              viteCSSURLMarkerRE,
+              // replace css module id with css file name
+              (_, matchId) => pureCssIdMapAssetUrl.get(matchId) || matchId
             )
           }
         }
